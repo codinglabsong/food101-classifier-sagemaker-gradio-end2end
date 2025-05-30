@@ -301,7 +301,7 @@ def main():
         optimizer,
         max_lr=cfg.lr_backbone,
         total_steps=total_steps,
-        pct_start=0.1,
+        pct_start=0.2,
         anneal_strategy="cos",
     )
 
