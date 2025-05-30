@@ -41,7 +41,6 @@ pip install -r requirements.txt
 ```
 *For CUDA users, see PyTorch's [install guide](https://pytorch.org/get-started/locally/)*
 
-
 ### 2. Prepare the Dataset
 - Quick sample Food101 dataset for local development:
     ```bash
@@ -82,6 +81,32 @@ Edit `.env` using `.env.example` as a guide for AWS and wandb keys.
     ```bash
     python scripts/remote_train.py
     ```
+
+### Preprocessing Consistency & Image Size Limit
+
+> **Important:**  
+> The preprocessing pipeline (image resizing, cropping, normalization) **must be identical** between training and inference (including Gradio app or deployment).
+>
+> - All transforms should use parameters from `config/prod.yaml` (or your config file).
+> - The value of `img_size` used for training and inference must always be ≤ 256, since images are first resized so their short edge is 256 before center cropping.  
+> - **Do not set `img_size` greater than 256.** This would result in errors or ineffective cropping during inference.
+
+**Best practice:**  
+Update only your config file (not hardcoded values) when changing image size or normalization, and always reload configs in both training and inference code.
+
+## Running the Gradio Inference App
+This project includes an interactive Gradio app for making predictions with the trained model.
+
+1. **Obtain the Trained Model:**
+- Make sure you have the trained model file (`model.pth`). 
+- If you trained the model yourself, it should be saved automatically to the `output/` directory.
+- If you received a pre-trained model, download it and place it in the `output/` directory at the project root.
+
+2. **Run the App Locally:**
+    ```bash
+    python gradio_app.py
+    ```
+- The app will start locally and print a link (e.g., `http://127.0.0.1:7860`) to access the web UI in your browser.
 
 ## Requirements
 - See `requirements.txt`

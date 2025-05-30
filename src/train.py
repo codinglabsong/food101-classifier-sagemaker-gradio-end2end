@@ -110,7 +110,7 @@ def main():
     # ---------- Data Preprocessing ----------
     # image transforms
     train_tfms = transforms.Compose([
-        transforms.RandomResizedCrop(cfg.img_size),       # random crop + resize 
+        transforms.RandomResizedCrop(cfg.img_size),         # random crop + resize 
         transforms.RandomHorizontalFlip(),                  # random 50 % mirror
         transforms.ToTensor(),                              # H×W×C -> C×H×W in [0,1]
         transforms.Normalize([0.485,0.456,0.406],           # ImageNet distribution
@@ -118,7 +118,7 @@ def main():
     ])
     test_tfms = transforms.Compose([
         transforms.Resize(256),                             # shrink so short edge=256
-        transforms.CenterCrop(cfg.img_size),              # take middle window
+        transforms.CenterCrop(cfg.img_size),                # take middle window
         transforms.ToTensor(),
         transforms.Normalize([0.485,0.456,0.406],           
                             [0.229,0.224,0.225])

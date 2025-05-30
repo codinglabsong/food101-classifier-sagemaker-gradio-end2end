@@ -6,3 +6,5 @@ PyYAML
 ruff
 python-dotenv
 wandb
+gradio
+Pillow
