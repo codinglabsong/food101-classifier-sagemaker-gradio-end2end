@@ -9,10 +9,11 @@ __pycache__/
 # wandb 
 wandb/
 
-# full datasets
+# full datasets and cache
 data/full/
 data/sample/
 *.tar.gz
+.cache
 
 # local‐mode outputs
 sagemaker-*
