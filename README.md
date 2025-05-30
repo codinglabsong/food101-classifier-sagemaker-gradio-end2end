@@ -1,7 +1,7 @@
-# Food101 EfficientNet-B2 Classifier
+# Food101 End-to-End Image Classifier (PyTorch + SageMaker + Gradio)
 
 **A reproducible, end-to-end PyTorch pipeline for Food101 image classification.**
-Supports local development, SageMaker training, flexible dataset prep, and is ready for future deployment (API & Gradio app).
+Supports local development, SageMaker training, flexible dataset prep, Weights & Biases, and is ready for deployment through Gradio.
 
 ## Features
 - EfficientNet-B2 transfer learning (feature extraction + fine-tuning)
@@ -9,7 +9,7 @@ Supports local development, SageMaker training, flexible dataset prep, and is re
 - Dataset preparation: full or small sample subsets
 - Logging and experiment tracking (Weights & Biases)
 - Model checkpointing and flexible configuration
-- Ready for deployment (SageMaker endpoint and Gradio web app coming soon)
+- Ready for deployment (Gradio web app)
 
 ## Project Structure
 ```graphql
