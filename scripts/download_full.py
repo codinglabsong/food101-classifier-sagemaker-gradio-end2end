@@ -22,13 +22,14 @@ def main():
     ds_test = datasets.Food101(cache, split="test", download=True)
     
     # save images (train and test)
-    print("Saving Images...")
+    print("Saving train images...")
     for idx, (img, lbl) in enumerate(ds_train):
         class_name = ds_train.classes[lbl] # lbl from Food101 is an integer
         out_path = out / "train" / class_name / f"{idx}.jpg"
         out_path.parent.mkdir(parents=True, exist_ok=True)
         img.save(out_path)
-     
+    
+    print("Saving test images...")
     for idx, (img, lbl) in enumerate(ds_test):
         class_name = ds_test.classes[lbl]
         out_path = out / "test" / class_name / f"{idx}.jpg"

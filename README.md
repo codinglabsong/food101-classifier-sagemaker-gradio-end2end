@@ -33,11 +33,71 @@ Supports local development, SageMaker training, flexible dataset prep, and is re
 ```
 
 ## Quick Start
-1. Clone & Install
+### 1. Clone & Install
 ```bash
 git clone https://github.com/<your-username>/food101-classifier.git
 cd food101-classifier
 pip install -r requirements.txt
 ```
-*For CUDA users, see PyTorch's [install guide](https://pytorch.org/get-started/locally/)
+*For CUDA users, see PyTorch's [install guide](https://pytorch.org/get-started/locally/)*
 
+
+### 2. Prepare the Dataset
+- Quick sample Food101 dataset for local development:
+    ```bash
+    python scripts/download_sample.py --out data/sample --train-per-class 20 --test-per-class 4
+    ```
+- Full Food101 dataset (may take time/disk space):
+    ```bash
+    python scripts/download_full.py --out data/full
+    ```
+
+### 3. Train Locally
+```bash
+python src/train.py \
+  --batch-size 64 \
+  --num-epochs-phase1 2 \
+  --num-epochs-phase2 2 \
+  --lr-head 1e-3 \
+  --lr-backbone 1e-3 \
+  --patience 3 \
+  --num-workers 4 \
+  --img-size 224
+```
+*Use `--help` for all options.*
+
+### 4. Setting Environment Variables
+Edit `.env` using `.env.example` as a guide for AWS and wandb keys.
+
+### SageMaker Training
+1. Upload tarred datasets to S3:
+    ```bash
+    tar czf food101-train.tar.gz -C data/full/train .
+    tar czf food101-test.tar.gz -C data/full/test .
+    aws s3 cp food101-train.tar.gz s3://<your-bucket>/full/
+    aws s3 cp food101-test.tar.gz s3://<your-bucket>/full/
+    ```
+
+2. Launch SageMaker training:
+    ```bash
+    python scripts/remote_train.py
+    ```
+
+## Requirements
+- See `requirements.txt`
+- Python ≥ 3.8 recommended
+
+## Contributing
+Open to issues and pull requests!
+
+## References
+- [Food-101 Dataset](https://www.vision.ee.ethz.ch/datasets_extra/food-101/)
+- [EfficientNet Paper](https://arxiv.org/abs/1905.11946)
+- [PyTorch Docs](https://pytorch.org/)
+
+## License
+This project is licensed under the MIT License.
+
+## Tips:
+- .env.example helps keep secrets out of git.
+- .gitignore: Don't track datasets, outputs, or .env.
