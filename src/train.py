@@ -1,6 +1,6 @@
+from __future__ import annotations
 import argparse, os, torch, tarfile, tempfile, wandb, time, random
 import numpy as np
-from __future__ import annotations
 from torch import nn, optim
 from torch.optim.lr_scheduler import OneCycleLR
 from torch.utils.data import DataLoader, random_split, Subset
@@ -23,7 +23,7 @@ def parse_args():
     p.add_argument("--img-size", type=int, default=224)
     
     # other variables
-    p.add_argument("--wandb-project", type=str, default="mnist-sagemaker")
+    p.add_argument("--wandb-project", type=str, default="food101-classifier")
     
     # data and output directories (special SageMaker paths that rely on Sagemaker's env vars)
     p.add_argument("--model-dir", default=os.getenv("SM_MODEL_DIR", "output/"))
@@ -110,7 +110,7 @@ def main():
     # ---------- Data Preprocessing ----------
     # image transforms
     train_tfms = transforms.Compose([
-        transforms.RandomResizedCrop(cfg.image_size),       # random crop + resize 
+        transforms.RandomResizedCrop(cfg.img_size),       # random crop + resize 
         transforms.RandomHorizontalFlip(),                  # random 50 % mirror
         transforms.ToTensor(),                              # H×W×C -> C×H×W in [0,1]
         transforms.Normalize([0.485,0.456,0.406],           # ImageNet distribution
@@ -118,7 +118,7 @@ def main():
     ])
     test_tfms = transforms.Compose([
         transforms.Resize(256),                             # shrink so short edge=256
-        transforms.CenterCrop(cfg.image_size),              # take middle window
+        transforms.CenterCrop(cfg.img_size),              # take middle window
         transforms.ToTensor(),
         transforms.Normalize([0.485,0.456,0.406],           
                             [0.229,0.224,0.225])
@@ -170,7 +170,7 @@ def main():
         return model.to(DEVICE)
 
     class_names = full_train_ds.classes
-    print(f"class_names ({len(class_names)}): {class_names}")
+    print(f"number of class labels: {len(class_names)}")
     model = build_model(len(class_names))
     criterion = nn.CrossEntropyLoss() # standard multi-class loss
     
@@ -188,7 +188,7 @@ def main():
         t0 = time.time()
 
         with torch.set_grad_enabled(is_train):
-            for step, (x, y) in enumerate(tqdm(loader, desc=phase)):                           # mini-batch loop
+            for x, y in tqdm(loader, desc=phase):                           # mini-batch loop
                 x, y = x.to(DEVICE,non_blocking=True), y.to(DEVICE,non_blocking=True)
                 outputs = model(x)
                 loss = criterion(outputs, y)
@@ -308,7 +308,7 @@ def main():
                 "scheduler": scheduler.state_dict(),
                 "epoch": epoch,
                 "val_acc": val_acc
-        }, "best_backbone.pth")
+        }, "best_backbone.pth", cfg.model_dir)
         
     # final test
     model.eval()
