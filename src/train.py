@@ -172,6 +172,15 @@ def main():
     class_names = full_train_ds.classes
     print(f"number of class labels: {len(class_names)}")
     model = build_model(len(class_names))
+    
+    # try compile if supported:
+    if DEVICE.type == "cuda" and torch.cuda.is_available():
+        cap = torch.cuda.get_device_properties(DEVICE).major
+        if cap >= 7:
+            model = torch.compile(model)
+        else:
+            print(f"GPU CC {cap}.x detected - skipping torch.compile()")
+
     criterion = nn.CrossEntropyLoss() # standard multi-class loss
     
     # one epoch function
