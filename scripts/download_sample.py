@@ -13,6 +13,21 @@ def parse_args():
     return p.parse_args()
         
 def pick_and_save(ds, split, n_per_class, out, rng):
+    """
+    Selects up to n_per_class images per class from a dataset and saves them to disk.
+
+    Args:
+        ds: A torchvision-style dataset object.
+        split (str): Name of the data split ('train', 'test', etc.).
+        n_per_class (int): Number of images to save per class.
+        out (Path): Output directory for saved images.
+        rng (random.Random): Random number generator for reproducibility.
+
+    Saves:
+        Images are saved as JPEG files in out/split/<class_name>/.
+        Warns if a class has fewer than n_per_class images.
+    """
+    
     # Step 1: Build class-to-indices mapping for efficient looping of large dataset
     class_indices = defaultdict(list)
     for idx in range(len(ds)):
