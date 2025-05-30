@@ -1,11 +1,11 @@
 estimator:
   hyperparameters:
     seed: 42
-    batch_size: 1024
-    num_epochs_phase1: 6
-    num_epochs_phase2: 3
-    lr_head: 0.001
-    lr_backbone: 0.001
+    batch_size: 128
+    num_epochs_phase1: 10
+    num_epochs_phase2: 8
+    lr_head: 4e-3
+    lr_backbone: 4e-4
     patience: 3
     num_workers: 3
     img_size: 224
