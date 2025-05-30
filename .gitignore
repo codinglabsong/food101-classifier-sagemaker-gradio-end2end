@@ -1,0 +1,19 @@
+# Byte‐compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# secrets
+.env
+
+# wandb 
+wandb/
+
+# full datasets
+data/full/
+data/sample/
+*.tar.gz
+
+# local‐mode outputs
+sagemaker-*
+output/

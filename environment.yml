@@ -1,0 +1,16 @@
+name: mnist-cnn           
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.12.3           
+  - pytorch=2.5.1           
+  - torchvision=0.20.1      
+  - pip                  
+  - pip:
+    - boto3
+    - sagemaker[local]==2.213.0
+    - tqdm
+    - PyYAML
+    - ruff      
+    - python-dotenv         
