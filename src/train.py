@@ -1,16 +1,26 @@
-import argparse, os, json, torch, tarfile, tempfile, wandb
-from torch.utils.data import DataLoader
-from torchvision import datasets, transforms
+import argparse, os, torch, tarfile, tempfile, wandb, time, random
+import numpy as np
+from __future__ import annotations
 from torch import nn, optim
-from model import Net
+from torch.optim.lr_scheduler import OneCycleLR
+from torch.utils.data import DataLoader, random_split, Subset
+from torchvision import datasets, models, transforms
+from tqdm import tqdm
+from typing import Dict, Tuple, Optional
 
 def parse_args():
     p = argparse.ArgumentParser()
     
     # hyperparameters sent by the client (same flag names as estimator hyperparameters)
-    p.add_argument("--epochs", type=int, default=2)
-    p.add_argument("--lr", type=float, default=1e-3)
+    p.add_argument("--seed", type=int, default=42)
     p.add_argument("--batch-size", type=int, default=64)
+    p.add_argument("--num-epochs-phase1", type=int, default=2)
+    p.add_argument("--num-epochs-phase2", type=int, default=2)
+    p.add_argument("--lr-head", type=float, default=1e-3)
+    p.add_argument("--lr-backbone", type=float, default=1e-3)
+    p.add_argument("--patience", type=int, default=3)
+    p.add_argument("--num-workers", type=int, default=4)
+    p.add_argument("--img-size", type=int, default=224)
     
     # other variables
     p.add_argument("--wandb-project", type=str, default="mnist-sagemaker")
@@ -21,19 +31,26 @@ def parse_args():
     p.add_argument("--test-dir", default=os.getenv("SM_CHANNEL_TEST", "data/sample/test/"))
     return p.parse_args()
 
-def ensure_unpacked(path):
+def ensure_unpacked(path: str) -> str:
     """
-    • If *path* is a .tar/.tar.gz/.tgz file → untar once, return the folder.
-    • If *path* is a directory that contains exactly one such tarball
-      (the SageMaker channel case) → untar in place and return path.
-    • Otherwise just return path unchanged.
+    Unpacks a tarball if necessary and returns the path to the unpacked directory.
+    
+    - If path is a .tar/.tar.gz/.tgz file -> untar once, return the folder.
+    - If path is a directory that contains exactly one such tarball -> untar in place and return path.
+    - If neither case applies, returns the original path unchanged.
+    
+    Args:
+        path (str): Path to a tarball file or directory.
+
+    Returns:
+        str: Path to the unpacked directory or the original path if no unpacking was performed.
     """
-    # Case 1 ─ path *is* the tarball
+    # Case 1 ─ path is the tarball
     if os.path.isfile(path) and path.endswith((".tar", ".tar.gz", ".tgz")):
         work = tempfile.mkdtemp(prefix="untar_", dir=os.path.dirname(path))
         with tarfile.open(path, "r:*") as tar:
             tar.extractall(work)
-        return work                           # /tmp/untar_xxx/0/ 1/ …
+        return work                           
 
     # Case 2 ─ path is a directory containing one tarball
     if os.path.isdir(path):
@@ -42,73 +59,266 @@ def ensure_unpacked(path):
             entries[0].endswith((".tar", ".tar.gz", ".tgz"))):
             tar_path = os.path.join(path, entries[0])
             with tarfile.open(tar_path, "r:*") as tar:
-                tar.extractall(path)          # extract right here
-            os.remove(tar_path)               # optional: delete the tar
+                tar.extractall(path)         
+            os.remove(tar_path)               
     return path
+
+def set_seed(seed: int) -> None:
+    """Ensure reproducibility"""
+    random.seed(seed)                               # vanilla Python Random Number Generator (RNG)
+    np.random.seed(seed)                            # NumPy RNG
+    torch.manual_seed(seed)                         # CPU-side torch RNG
+    torch.cuda.manual_seed_all(seed)                # all GPU RNGs
+    torch.backends.cudnn.deterministic = True     # force deterministic conv kernels
+    torch.backends.cudnn.benchmark = False        # trade speed for reproducibility
 
 def main():
     cfg = parse_args()
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    
+    # ---------- Initialization ----------
+    # choose device
+    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using: {DEVICE}")
     
     # wandb init
     wandb.init(
         project=cfg.wandb_project,
-        config=vars(cfg)
+        config={
+            "architecture": "EfficientNet_B2_Weights.IMAGENET1K_V1",
+            "dataset": "FOOD-101",
+            "batch_size": cfg.batch_size,
+            "num_epochs_phase1": cfg.num_epochs_phase1,
+            "num_epochs_phase2": cfg.num_epochs_phase2,
+            "lr_head": cfg.lr_head,
+            "lr_backbone": cfg.lr_backbone,
+            "patience": cfg.patience,
+            "num_workers": cfg.num_workers,
+            "img_size": cfg.img_size,
+            "seed": cfg.seed,
+        },
     )
     
-    # data preparation
+    # reproducibility
+    set_seed(cfg.seed)
+    print(f"Set seed: {cfg.seed}")
+    
+    # unpack tarball
     train_root = ensure_unpacked(cfg.train_dir)
     test_root  = ensure_unpacked(cfg.test_dir)
+    print("Unpacked data tarball")
     
-    tx = transforms.Compose([
-        transforms.Grayscale(num_output_channels=1),
-        transforms.ToTensor()
-        ])
-    train_ds = datasets.ImageFolder(train_root, transform=tx)
-    test_ds = datasets.ImageFolder(test_root, transform=tx)
+    # ---------- Data Preprocessing ----------
+    # image transforms
+    train_tfms = transforms.Compose([
+        transforms.RandomResizedCrop(cfg.image_size),       # random crop + resize 
+        transforms.RandomHorizontalFlip(),                  # random 50 % mirror
+        transforms.ToTensor(),                              # H×W×C -> C×H×W in [0,1]
+        transforms.Normalize([0.485,0.456,0.406],           # ImageNet distribution
+                            [0.229,0.224,0.225])
+    ])
+    test_tfms = transforms.Compose([
+        transforms.Resize(256),                             # shrink so short edge=256
+        transforms.CenterCrop(cfg.image_size),              # take middle window
+        transforms.ToTensor(),
+        transforms.Normalize([0.485,0.456,0.406],           
+                            [0.229,0.224,0.225])
+    ])
     
-    train_dl = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True, num_workers=4)
-    test_dl = DataLoader(test_ds, batch_size=cfg.batch_size, shuffle=False, num_workers=4)
+    # load dataset
+    full_train_ds = datasets.ImageFolder(train_root, transform=train_tfms)
+    test_ds = datasets.ImageFolder(test_root, transform=test_tfms)
+    
+    # split train_ds/val_ds
+    train_len = int(0.8 * len(full_train_ds)) # 80 %
+    val_len = len(full_train_ds) - train_len # 20 %
 
-    # import model and train/val/test
-    model = Net().to(device)
-    loss_fn = nn.CrossEntropyLoss()
-    opt = optim.Adam(model.parameters(), lr=cfg.lr)
+    train_ds, val_tmp = random_split(
+        full_train_ds,
+        lengths=[train_len, val_len],
+        generator=torch.Generator().manual_seed(cfg.seed)
+    )
 
-    for ep in range(cfg.epochs):
-        model.train()
-        run_loss = 0
-        for x, y in train_dl:
-            x, y = x.to(device), y.to(device)
-            opt.zero_grad()
-            loss = loss_fn(model(x), y)
-            loss.backward()
-            opt.step()
-            run_loss  += loss.item()
-        loss = run_loss/len(train_dl)
+    val_ds = Subset(
+        datasets.ImageFolder(train_root, transform=test_tfms),
+        val_tmp.indices # reuse exact same images but w/ test transforms
+    )
+    
+    # dataloaders
+    train_dl = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers, pin_memory=True)
+    val_dl = DataLoader(val_ds, batch_size=cfg.batch_size, num_workers=cfg.num_workers, pin_memory=True)
+    test_dl = DataLoader(test_ds, batch_size=cfg.batch_size, num_workers=cfg.num_workers, pin_memory=True)
+    
+    print(f"Data ready. len(train)={len(train_ds)}, len(val)={len(val_ds)}, len(test)={len(test_ds)}")
+    
+    # ---------- Model Training Preparation ----------
+    # create the model
+    def build_model(num_classes: int) -> nn.Module:
+        """
+        Builds an EfficientNet-B2 model with a frozen backbone and a custom classification head.
+
+        Args:
+            num_classes (int): Number of output classes for the classification head.
+
+        Returns:
+            nn.Module: The modified EfficientNet-B2 model ready for training.
+        """
+        model = models.efficientnet_b2(weights=models.EfficientNet_B2_Weights.IMAGENET1K_V1)
+        for p in model.parameters():
+            p.requires_grad = False # freeze all backbone layers
+        in_features = model.classifier[1].in_features # incoming dims to classifier
+        model.classifier[1] = nn.Linear(in_features, num_classes) # new classifier head
+        return model.to(DEVICE)
+
+    class_names = full_train_ds.classes
+    print(f"class_names ({len(class_names)}): {class_names}")
+    model = build_model(len(class_names))
+    criterion = nn.CrossEntropyLoss() # standard multi-class loss
+    
+    # one epoch function
+    def epoch_loop (phase: str, 
+                    model: nn.Module, 
+                    loader: DataLoader, 
+                    optimizer: Optional[torch.optim.Optimizer] = None,
+                    scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
+                    ) -> Tuple[float, float]:
+        is_train = optimizer is not None
+        model.train() if is_train else model.eval()
+
+        run_loss, run_correct, imgs_processed = 0.0, 0, 0
+        t0 = time.time()
+
+        with torch.set_grad_enabled(is_train):
+            for step, (x, y) in enumerate(tqdm(loader, desc=phase)):                           # mini-batch loop
+                x, y = x.to(DEVICE,non_blocking=True), y.to(DEVICE,non_blocking=True)
+                outputs = model(x)
+                loss = criterion(outputs, y)
+
+                if is_train:
+                    optimizer.zero_grad(set_to_none=True)                   # saves a bit of GPU memory
+                    loss.backward()                                         # back-prop                
+                    optimizer.step()                                        # update params
+                    if scheduler is not None:
+                        scheduler.step()
+
+                batch_size = x.shape[0]
+                run_loss += loss.item()*batch_size                          # accumulate summed loss
+                run_correct += (outputs.argmax(1) == y).sum().item()
+                imgs_processed += batch_size                                # add to throughput counter
+
+                # wandb: batch logging (train & val only)
+                if phase in ["train", "val"]:
+                    wandb.log({
+                        f"{phase}/batch_loss": loss.item(),
+                    })
+            
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()                                        # CPU waits until GPU finishes. More accurate dt.
         
-        wandb.log({"loss": loss})
-        print(f"Epoch {ep+1}/{cfg.epochs} | loss={loss:.4f}")
+        dt = time.time() - t0                                               # total epoch time in seconds
+        epoch_loss = run_loss / len(loader.dataset) 
+        epoch_acc = run_correct / len(loader.dataset)
+        throughput = imgs_processed / dt
+        
+        print(f"{phase:5} | loss {epoch_loss:.4f} | acc {epoch_acc:.4f} | {dt:5.1f}s | {throughput:7.1f} samples/s")
+        
+        # wandb: epoch logging (train & val only)
+        if phase in ["train", "val"]:
+            wandb.log({
+                f"{phase}/epoch_loss": epoch_loss,
+                f"{phase}/epoch_acc": epoch_acc,
+                f"{phase}/dt": dt,
+                f"{phase}/throughput (samples/s)": throughput,
+            })
+        return epoch_loss, epoch_acc
+    
+    # checkpoint helper
+    def save_ckpt(state: Dict, filename: str, model_dir: str) -> None:
+        """Save model checkpoint to the specified directory."""
+        os.makedirs(model_dir, exist_ok=True)
+        path = os.path.join(model_dir, filename)
+        torch.save(state, path)
+        
+    # ---------- Training and Evaluation ----------
+    # phase 1: feature extraction (freeze backbone, train only the new head)
+    print("Phase 1: feature extraction")
+    
+    optimizer = optim.Adam(model.classifier[1].parameters(), lr=cfg.lr_head)
 
+    n_steps_per_epoch = len(train_dl) # how many batches per epoch
+    total_steps = cfg.num_epochs_phase1 * n_steps_per_epoch
+    best_val, patience_cnt = 1e9, 0
+
+    scheduler = OneCycleLR(
+        optimizer,
+        max_lr=cfg.lr_head,
+        total_steps=total_steps,
+        pct_start=0.2,            # 20% of total steps for LR warm-up
+        anneal_strategy="cos",    # cosine annealing down
+    )
+
+    # train
+    for epoch in range(1, cfg.num_epochs_phase1+1):
+        print(f"\nEpoch {epoch}/{cfg.num_epochs_phase1}")
+        _, _ = epoch_loop("train", model, train_dl, optimizer, scheduler)
+        val_loss, val_acc = epoch_loop("val", model, val_dl)
+
+        # checkpointing
+        if val_loss < best_val:                         # improved loss -> save
+            best_val, patience_cnt = val_loss, 0
+            save_ckpt({
+                "state_dict": model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "scheduler": scheduler.state_dict(),
+                "epoch": epoch,
+                "val_acc": val_acc
+            }, "best_head.pth", cfg.model_dir)
+        else:                                           # no improve
+            patience_cnt += 1
+            if patience_cnt >= cfg.patience:
+                print("Early stop triggered.")
+                break
+            
+    # Phase 2: fine-tune (unfreeze backbone, train whole model at lower LR)
+    print("Phase 2: fine-tune")
+    
+    # unfreeze backbone
+    for p in model.parameters():
+        p.requires_grad = True
+
+    optimizer = optim.Adam(model.parameters(), lr=cfg.lr_backbone)
+    total_steps = cfg.num_epochs_phase2 * n_steps_per_epoch
+
+    scheduler = OneCycleLR(
+        optimizer,
+        max_lr=cfg.lr_backbone,
+        total_steps=total_steps,
+        pct_start=0.1,
+        anneal_strategy="cos",
+    )
+
+    # train
+    for epoch in range(1, cfg.num_epochs_phase2+1):
+        print(f"\nEpoch {epoch}/{cfg.num_epochs_phase2}")
+        _, _ = epoch_loop("train", model, train_dl, optimizer, scheduler)
+        val_loss, val_acc = epoch_loop("val", model, val_dl)
+
+        save_ckpt({
+                "state_dict": model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "scheduler": scheduler.state_dict(),
+                "epoch": epoch,
+                "val_acc": val_acc
+        }, "best_backbone.pth")
+        
+    # final test
     model.eval()
-    correct = total = 0
-    with torch.no_grad():
-        for x, y in test_dl:
-            x, y = x.to(device), y.to(device)
-            preds = model(x).argmax(1)
-            correct += (preds == y).sum().item()
-            total += y.size(0)
-    acc = correct / total
-    
-    wandb.summary["test_accuracy"] = acc
-    print(f"test-accuracy={acc:.4%}")
-    
-    os.makedirs(cfg.model_dir, exist_ok=True)
+    _, test_acc = epoch_loop("test", model, test_dl)
+    print(f"Final Test Acc: {test_acc:.4f}")
+
+    # save final model
     torch.save(model.state_dict(), os.path.join(cfg.model_dir, "model.pth"))
-    with open(os.path.join(cfg.model_dir, "metrics.json"), "w") as f:
-        json.dump({"accuracy": acc}, f)
     
     wandb.finish()
-
+    
 if __name__ == "__main__":
     main()

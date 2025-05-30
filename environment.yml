@@ -1,4 +1,4 @@
-name: mnist-cnn           
+name: food101-EfficientNet_B2        
 channels:
   - defaults
   - conda-forge
@@ -8,7 +8,6 @@ dependencies:
   - torchvision=0.20.1      
   - pip                  
   - pip:
-    - boto3
     - sagemaker[local]==2.213.0
     - tqdm
     - PyYAML

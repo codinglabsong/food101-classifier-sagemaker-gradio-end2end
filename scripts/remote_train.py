@@ -23,7 +23,7 @@ est = PyTorch(
 )
 
 bucket  = os.getenv("SM_BUCKET")
-train_uri = f"s3://{bucket}/full/mnist-train.tar.gz"
-test_uri = f"s3://{bucket}/full/mnist-test.tar.gz"
+train_uri = f"s3://{bucket}/full/food101-train.tar.gz"
+test_uri = f"s3://{bucket}/full/food101-test.tar.gz"
 
 est.fit({"train": train_uri, "test": test_uri})

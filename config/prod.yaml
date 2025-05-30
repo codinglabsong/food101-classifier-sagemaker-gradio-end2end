@@ -1,8 +1,14 @@
 estimator:
   hyperparameters:
-    epochs: 6
-    lr: 0.001
-    batch: 1024
+    seed: 42
+    batch_size: 1024
+    num_epochs_phase1: 6
+    num_epochs_phase2: 3
+    lr_head: 0.001
+    lr_backbone: 0.001
+    patience: 3
+    num_workers: 3
+    img_size: 224
   instance_count: 1
   instance_type: "ml.m5.xlarge"
   framework_version: "2.2.0"

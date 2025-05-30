@@ -18,18 +18,20 @@ def main():
     
     # download MNIST into .cache
     cache = Path(".cache")
-    ds_train = datasets.MNIST(cache, train=True, download=True)
-    ds_test = datasets.MNIST(cache, train=False, download=True)
+    ds_train = datasets.Food101(cache, split="train", download=True)
+    ds_test = datasets.Food101(cache, split="test", download=True)
     
     # save images (train and test)
     print("Saving Images...")
     for idx, (img, lbl) in enumerate(ds_train):
-        out_path = out / "train" / str(lbl) / f"{idx}.png"
+        class_name = ds_train.classes[lbl] # lbl from Food101 is an integer
+        out_path = out / "train" / class_name / f"{idx}.jpg"
         out_path.parent.mkdir(parents=True, exist_ok=True)
         img.save(out_path)
      
     for idx, (img, lbl) in enumerate(ds_test):
-        out_path = out / "test" / str(lbl) / f"{idx}.png"
+        class_name = ds_test.classes[lbl]
+        out_path = out / "test" / class_name / f"{idx}.jpg"
         out_path.parent.mkdir(parents=True, exist_ok=True)
         img.save(out_path)
     
