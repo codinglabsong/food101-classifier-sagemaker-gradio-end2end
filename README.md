@@ -27,7 +27,8 @@ Supports local development, SageMaker training, flexible dataset prep, Weights &
 ├── src/
 │   └── train.py               # Main training script
 ├── .env.example               # Example for API keys/secrets
-├── requirements.txt           # pip dependencies
+├── requirements.txt           # Pip dependencies
+├── gradio_app.py              # Gradio tnterface
 ├── README.md
 └── .gitignore
 ```
