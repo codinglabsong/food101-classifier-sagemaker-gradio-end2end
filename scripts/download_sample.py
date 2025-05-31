@@ -1,7 +1,9 @@
+from __future__ import annotations
 import argparse, random, shutil
 from collections import defaultdict
 from pathlib import Path
 from PIL import Image
+from torch.utils.data import Dataset
 from torchvision import datasets
 
 def parse_args():
@@ -11,8 +13,13 @@ def parse_args():
     p.add_argument("--test-per-class", type=int, default=4, help="images/class for test")
     p.add_argument("--seed", type=int, default=42)
     return p.parse_args()
-        
-def pick_and_save(ds, split, n_per_class, out, rng):
+
+def pick_and_save(ds: Dataset, 
+                  split: str, 
+                  n_per_class: int, 
+                  out: Path, 
+                  rng: random.Random
+                  ) -> None:
     """
     Selects up to n_per_class images per class from a dataset and saves them to disk.
 

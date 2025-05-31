@@ -186,7 +186,11 @@ def main():
     criterion = nn.CrossEntropyLoss() # standard multi-class loss
     
     # one epoch function
-    scaler = GradScaler('cuda') if torch.cuda.is_available() else None                      # if using autocast('cuda') in epoch_loop
+    if torch.cuda.is_available():                                                           # if using autocast('cuda') in epoch_loop
+        scaler = GradScaler('cuda')
+        print("Detected CUDA, using autocast...")
+    else:
+        scaler = None
     
     def epoch_loop (phase: str, 
                     model: nn.Module, 
