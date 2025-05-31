@@ -1,7 +1,9 @@
 from __future__ import annotations
 import argparse, os, torch, tarfile, tempfile, wandb, time, random
+from contextlib import nullcontext
 import numpy as np
 from torch import nn, optim
+from torch.amp import autocast, GradScaler
 from torch.optim.lr_scheduler import OneCycleLR
 from torch.utils.data import DataLoader, random_split, Subset
 from torchvision import datasets, models, transforms
@@ -184,6 +186,8 @@ def main():
     criterion = nn.CrossEntropyLoss() # standard multi-class loss
     
     # one epoch function
+    scaler = GradScaler('cuda') if torch.cuda.is_available() else None                      # if using autocast('cuda') in epoch_loop
+    
     def epoch_loop (phase: str, 
                     model: nn.Module, 
                     loader: DataLoader, 
@@ -197,22 +201,39 @@ def main():
         t0 = time.time()
 
         with torch.set_grad_enabled(is_train):
-            for x, y in tqdm(loader, desc=phase):                           # mini-batch loop
+            for x, y in tqdm(loader, desc=phase):                                           # mini-batch loop
                 x, y = x.to(DEVICE,non_blocking=True), y.to(DEVICE,non_blocking=True)
-                outputs = model(x)
-                loss = criterion(outputs, y)
-
+                
+                optimizer.zero_grad(set_to_none=True) if is_train else None                 # saves a bit of GPU memory when setting to `none`
+                
+                # Use autocast if CUDA, else normal FP32
+                context = autocast('cuda') if torch.cuda.is_available() else nullcontext()  # increase GPU efficiency with autocast if available
+                with context:
+                    outputs = model(x)
+                    loss = criterion(outputs, y)
+                    
                 if is_train:
-                    optimizer.zero_grad(set_to_none=True)                   # saves a bit of GPU memory
-                    loss.backward()                                         # back-prop                
-                    optimizer.step()                                        # update params
-                    if scheduler is not None:
-                        scheduler.step()
+                    if scaler:
+                        scaler.scale(loss).backward()
+                        
+                        scaler.unscale_(optimizer)                                          # un-scale the gradients that live on the model (needed for gradient clipping)
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                        
+                        did_step = scaler.step(optimizer)
+                        scaler.update()
+                        if did_step and scheduler:                                          # must only call scheduler.step() if optimizer.step() actually happened. Otherwise the learning rate schedule will get out of sync when using GradScaler.
+                            scheduler.step()
+                    else:
+                        loss.backward()                                                     # back-prop
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)    # gradient clipping for stability during training
+                        optimizer.step()                                                    # update params
+                        if scheduler:
+                            scheduler.step()
 
                 batch_size = x.shape[0]
-                run_loss += loss.item()*batch_size                          # accumulate summed loss
+                run_loss += loss.item()*batch_size                                          # accumulate summed loss
                 run_correct += (outputs.argmax(1) == y).sum().item()
-                imgs_processed += batch_size                                # add to throughput counter
+                imgs_processed += batch_size                                                # add to throughput counter
 
                 # wandb: batch logging (train & val only)
                 if phase in ["train", "val"]:
@@ -221,23 +242,36 @@ def main():
                     })
             
         if torch.cuda.is_available():
-            torch.cuda.synchronize()                                        # CPU waits until GPU finishes. More accurate dt.
+            torch.cuda.synchronize()                                                        # CPU waits until GPU finishes. More accurate dt.
         
-        dt = time.time() - t0                                               # total epoch time in seconds
+        dt = time.time() - t0                                                               # total epoch time in seconds
         epoch_loss = run_loss / len(loader.dataset) 
         epoch_acc = run_correct / len(loader.dataset)
         throughput = imgs_processed / dt
+        if is_train and scaler:
+            loss_scale = scaler.get_scale()
+            peak_mem_MB = torch.cuda.max_memory_allocated()/1024**2
         
+        # logging
         print(f"{phase:5} | loss {epoch_loss:.4f} | acc {epoch_acc:.4f} | {dt:5.1f}s | {throughput:7.1f} samples/s")
+        if is_train and scaler:
+            print(f"loss_scale={loss_scale:.0f}  peak_mem={peak_mem_MB:.0f} MB")
+            torch.cuda.reset_peak_memory_stats()
         
         # wandb: epoch logging (train & val only)
         if phase in ["train", "val"]:
-            wandb.log({
+            metrics = {
                 f"{phase}/epoch_loss": epoch_loss,
                 f"{phase}/epoch_acc": epoch_acc,
                 f"{phase}/dt": dt,
                 f"{phase}/throughput (samples/s)": throughput,
-            })
+            }
+            if is_train and scaler:
+                metrics.update({
+                    f"{phase}/loss_scale": loss_scale,
+                    f"{phase}/peak_mem_MB": peak_mem_MB,
+                })
+            wandb.log(metrics)
         return epoch_loss, epoch_acc
     
     # checkpoint helper
@@ -274,13 +308,16 @@ def main():
         # checkpointing
         if val_loss < best_val:                         # improved loss -> save
             best_val, patience_cnt = val_loss, 0
-            save_ckpt({
+            ckpt = {
                 "state_dict": model.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "scheduler": scheduler.state_dict(),
                 "epoch": epoch,
                 "val_acc": val_acc
-            }, "best_head.pth", cfg.model_dir)
+                }
+            if scaler:
+                ckpt["scaler"] = scaler.state_dict()
+            save_ckpt(ckpt, "best_head.pth", cfg.model_dir) 
         else:                                           # no improve
             patience_cnt += 1
             if patience_cnt >= cfg.patience:
@@ -311,18 +348,23 @@ def main():
         _, _ = epoch_loop("train", model, train_dl, optimizer, scheduler)
         val_loss, val_acc = epoch_loop("val", model, val_dl)
 
-        save_ckpt({
+        # checkpointing
+        ckpt = {
                 "state_dict": model.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "scheduler": scheduler.state_dict(),
                 "epoch": epoch,
                 "val_acc": val_acc
-        }, "best_backbone.pth", cfg.model_dir)
+        }
+        if scaler:
+            ckpt["scaler"] = scaler.state_dict()
+        save_ckpt(ckpt, "best_backbone.pth", cfg.model_dir)
         
     # final test
     model.eval()
     _, test_acc = epoch_loop("test", model, test_dl)
     print(f"Final Test Acc: {test_acc:.4f}")
+    wandb.summary["test_acc"] = test_acc
 
     # save final model
     torch.save(model.state_dict(), os.path.join(cfg.model_dir, "model.pth"))

@@ -55,11 +55,11 @@ pip install -r requirements.txt
 ### 3. Train Locally
 ```bash
 python src/train.py \
-  --batch-size 64 \
-  --num-epochs-phase1 2 \
+  --batch-size 32 \
+  --num-epochs-phase1 3 \
   --num-epochs-phase2 2 \
   --lr-head 1e-3 \
-  --lr-backbone 1e-3 \
+  --lr-backbone 1e-4 \
   --patience 3 \
   --num-workers 4 \
   --img-size 224
@@ -111,7 +111,8 @@ This project includes an interactive Gradio app for making predictions with the 
 
 ## Requirements
 - See `requirements.txt`
-- Python ≥ 3.8 recommended
+- Python ≥ 3.8
+- PyTorch >= 2.2
 
 ## Contributing
 Open to issues and pull requests!
