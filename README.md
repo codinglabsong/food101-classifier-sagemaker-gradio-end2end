@@ -10,6 +10,7 @@ Supports local development, SageMaker training, flexible dataset prep, Weights &
 - Logging and experiment tracking (Weights & Biases)
 - Model checkpointing and flexible configuration
 - Ready for deployment (Gradio web app)
+- Mixed precision training (with `autocast` and `GradScaler`) for improved speed and memory efficiency on GPU
 
 ## Project Structure
 ```graphql
