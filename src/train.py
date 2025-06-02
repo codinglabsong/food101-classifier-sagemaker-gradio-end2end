@@ -15,14 +15,14 @@ def parse_args():
     
     # hyperparameters sent by the client (same flag names as estimator hyperparameters)
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--batch-size", type=int, default=32)
-    p.add_argument("--num-epochs-phase1", type=int, default=3)
+    p.add_argument("--batch-size", type=int, default=512)
+    p.add_argument("--num-epochs-phase1", type=int, default=2)
     p.add_argument("--num-epochs-phase2", type=int, default=2)
-    p.add_argument("--lr-head", type=float, default=1e-3)
-    p.add_argument("--lr-backbone", type=float, default=1e-4)
+    p.add_argument("--lr-head", type=float, default=16e-3)
+    p.add_argument("--lr-backbone", type=float, default=16e-4)
     p.add_argument("--patience", type=int, default=3)
-    p.add_argument("--num-workers", type=int, default=4)
-    p.add_argument("--img-size", type=int, default=224)
+    p.add_argument("--num-workers", type=int, default=2)
+    p.add_argument("--img-size", type=int, default=384)
     
     # other variables
     p.add_argument("--wandb-project", type=str, default="food101-classifier")
@@ -119,7 +119,7 @@ def main():
                             [0.229,0.224,0.225])
     ])
     test_tfms = transforms.Compose([
-        transforms.Resize(256),                             # shrink so short edge=256
+        transforms.Resize(512),                             # shrink so short edge=256
         transforms.CenterCrop(cfg.img_size),                # take middle window
         transforms.ToTensor(),
         transforms.Normalize([0.485,0.456,0.406],           
@@ -192,6 +192,7 @@ def main():
     else:
         scaler = None
     
+    step_counters = {'train': 0, 'val': 0}
     def epoch_loop (phase: str, 
                     model: nn.Module, 
                     loader: DataLoader, 
@@ -200,6 +201,8 @@ def main():
                     ) -> Tuple[float, float]:
         is_train = optimizer is not None
         model.train() if is_train else model.eval()
+        # Use autocast if CUDA, else normal FP32
+        context = autocast('cuda') if torch.cuda.is_available() else nullcontext()  # increase GPU efficiency with autocast if available
 
         run_loss, run_correct, imgs_processed = 0.0, 0, 0
         t0 = time.time()
@@ -210,8 +213,6 @@ def main():
                 
                 optimizer.zero_grad(set_to_none=True) if is_train else None                 # saves a bit of GPU memory when setting to `none`
                 
-                # Use autocast if CUDA, else normal FP32
-                context = autocast('cuda') if torch.cuda.is_available() else nullcontext()  # increase GPU efficiency with autocast if available
                 with context:
                     outputs = model(x)
                     loss = criterion(outputs, y)
@@ -243,7 +244,8 @@ def main():
                 if phase in ["train", "val"]:
                     wandb.log({
                         f"{phase}/batch_loss": loss.item(),
-                    })
+                    }, step=step_counters[phase])
+                    step_counters[phase] += 1
             
         if torch.cuda.is_available():
             torch.cuda.synchronize()                                                        # CPU waits until GPU finishes. More accurate dt.
@@ -256,14 +258,15 @@ def main():
             loss_scale = scaler.get_scale()
             peak_mem_MB = torch.cuda.max_memory_allocated()/1024**2
         
-        # logging
-        print(f"{phase:5} | loss {epoch_loss:.4f} | acc {epoch_acc:.4f} | {dt:5.1f}s | {throughput:7.1f} samples/s")
-        if is_train and scaler:
-            print(f"loss_scale={loss_scale:.0f}  peak_mem={peak_mem_MB:.0f} MB")
-            torch.cuda.reset_peak_memory_stats()
-        
-        # wandb: epoch logging (train & val only)
+        # epoch logging: (train & val only)
         if phase in ["train", "val"]:
+            # print statements
+            print(f"{phase:5} | loss {epoch_loss:.4f} | acc {epoch_acc:.4f} | {dt:5.1f}s | {throughput:7.1f} samples/s")
+            if is_train and scaler:
+                print(f"loss_scale={loss_scale:.0f}  peak_mem={peak_mem_MB:.0f} MB")
+                torch.cuda.reset_peak_memory_stats()
+
+            # wandb
             metrics = {
                 f"{phase}/epoch_loss": epoch_loss,
                 f"{phase}/epoch_acc": epoch_acc,
@@ -275,7 +278,7 @@ def main():
                     f"{phase}/loss_scale": loss_scale,
                     f"{phase}/peak_mem_MB": peak_mem_MB,
                 })
-            wandb.log(metrics)
+            wandb.log(metrics, step=step_counters[phase] - 1)                               # ensures logging at the same step as the last batch of that epoch
         return epoch_loss, epoch_acc
     
     # checkpoint helper
@@ -287,7 +290,7 @@ def main():
         
     # ---------- Training and Evaluation ----------
     # phase 1: feature extraction (freeze backbone, train only the new head)
-    print("Phase 1: feature extraction")
+    print("\nPhase 1: feature extraction")
     
     optimizer = optim.Adam(model.classifier[1].parameters(), lr=cfg.lr_head)
 
@@ -329,7 +332,7 @@ def main():
                 break
             
     # Phase 2: fine-tune (unfreeze backbone, train whole model at lower LR)
-    print("Phase 2: fine-tune")
+    print("\nPhase 2: fine-tune")
     
     # unfreeze backbone
     for p in model.parameters():
@@ -365,9 +368,10 @@ def main():
         save_ckpt(ckpt, "best_backbone.pth", cfg.model_dir)
         
     # final test
+    print("\nFinal test")
     model.eval()
     _, test_acc = epoch_loop("test", model, test_dl)
-    print(f"Final Test Acc: {test_acc:.4f}")
+    print(f"\nFinal Test Acc: {test_acc:.4f}")
     wandb.summary["test_acc"] = test_acc
 
     # save final model
