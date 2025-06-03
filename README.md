@@ -10,7 +10,7 @@ Supports local development, SageMaker training, flexible dataset prep, Weights &
 - Logging and experiment tracking (Weights & Biases)
 - Model checkpointing and flexible configuration
 - Ready for deployment (Gradio web app)
-- Mixed precision training (with `autocast` and `GradScaler`) for improved speed and memory efficiency on GPU
+- Gradient clipping, OneCycle LR policy, and mixed precision training (with `autocast` and `GradScaler`) for improved stability and GPU memory efficiency
 
 ## Project Structure
 ```graphql
@@ -37,7 +37,7 @@ Supports local development, SageMaker training, flexible dataset prep, Weights &
 ## Quick Start
 ### 1. Clone & Install
 ```bash
-git clone https://github.com/<your-username>/food101-classifier.git
+git clone https://github.com/codinglabsong/food101-end2end-classifier-sagemaker-gradio.git
 cd food101-classifier
 pip install -r requirements.txt
 ```
@@ -90,8 +90,8 @@ Edit `.env` using `.env.example` as a guide for AWS and wandb keys.
 > The preprocessing pipeline (image resizing, cropping, normalization) **must be identical** between training and inference (including Gradio app or deployment).
 >
 > - All transforms should use parameters from `config/prod.yaml` (or your config file).
-> - The value of `img_size` used for training and inference must always be ≤ 256, since images are first resized so their short edge is 256 before center cropping.  
-> - **Do not set `img_size` greater than 256.** This would result in errors or ineffective cropping during inference.
+> - The value of `img_size` used for training and inference must always be ≤ 512, since images are first resized so their short edge is 512 before center cropping.  
+> - **Do not set `img_size` greater than 512.** This would result in errors or ineffective cropping during inference.
 
 **Best practice:**  
 Update only your config file (not hardcoded values) when changing image size or normalization, and always reload configs in both training and inference code.
@@ -112,8 +112,8 @@ This project includes an interactive Gradio app for making predictions with the 
 
 ## Requirements
 - See `requirements.txt`
-- Python ≥ 3.8
-- PyTorch >= 2.2
+- Python >= 3.9
+- PyTorch >= 2.6
 
 ## Contributing
 Open to issues and pull requests!
@@ -128,4 +128,4 @@ This project is licensed under the MIT License.
 
 ## Tips:
 - .env.example helps keep secrets out of git.
-- .gitignore: Don't track datasets, outputs, or .env.
+- .gitignore: Don't track datasets, outputs, wandb, or .env.

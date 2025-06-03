@@ -15,14 +15,14 @@ def parse_args():
     
     # hyperparameters sent by the client (same flag names as estimator hyperparameters)
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--batch-size", type=int, default=512)
-    p.add_argument("--num-epochs-phase1", type=int, default=2)
-    p.add_argument("--num-epochs-phase2", type=int, default=2)
-    p.add_argument("--lr-head", type=float, default=16e-3)
-    p.add_argument("--lr-backbone", type=float, default=16e-4)
+    p.add_argument("--batch-size", type=int, default=128)
+    p.add_argument("--num-epochs-phase1", type=int, default=10)
+    p.add_argument("--num-epochs-phase2", type=int, default=8)
+    p.add_argument("--lr-head", type=float, default=4e-3)
+    p.add_argument("--lr-backbone", type=float, default=4e-4)
     p.add_argument("--patience", type=int, default=3)
     p.add_argument("--num-workers", type=int, default=2)
-    p.add_argument("--img-size", type=int, default=384)
+    p.add_argument("--img-size", type=int, default=224)
     
     # other variables
     p.add_argument("--wandb-project", type=str, default="food101-classifier")
@@ -119,7 +119,7 @@ def main():
                             [0.229,0.224,0.225])
     ])
     test_tfms = transforms.Compose([
-        transforms.Resize(512),                             # shrink so short edge=256
+        transforms.Resize(256),                             # shrink so short edge=256
         transforms.CenterCrop(cfg.img_size),                # take middle window
         transforms.ToTensor(),
         transforms.Normalize([0.485,0.456,0.406],           
@@ -151,7 +151,7 @@ def main():
     test_dl = DataLoader(test_ds, batch_size=cfg.batch_size, num_workers=cfg.num_workers, pin_memory=True)
     
     print(f"Data ready. len(train)={len(train_ds)}, len(val)={len(val_ds)}, len(test)={len(test_ds)}")
-    
+       
     # ---------- Model Training Preparation ----------
     # create the model
     def build_model(num_classes: int) -> nn.Module:
@@ -175,14 +175,6 @@ def main():
     print(f"number of class labels: {len(class_names)}")
     model = build_model(len(class_names))
     
-    # try compile if supported:
-    if DEVICE.type == "cuda" and torch.cuda.is_available():
-        cap = torch.cuda.get_device_properties(DEVICE).major
-        if cap >= 7:
-            model = torch.compile(model)
-        else:
-            print(f"GPU CC {cap}.x detected - skipping torch.compile()")
-
     criterion = nn.CrossEntropyLoss() # standard multi-class loss
     
     # one epoch function
@@ -192,7 +184,6 @@ def main():
     else:
         scaler = None
     
-    step_counters = {'train': 0, 'val': 0}
     def epoch_loop (phase: str, 
                     model: nn.Module, 
                     loader: DataLoader, 
@@ -240,12 +231,11 @@ def main():
                 run_correct += (outputs.argmax(1) == y).sum().item()
                 imgs_processed += batch_size                                                # add to throughput counter
 
-                # wandb: batch logging (train & val only)
-                if phase in ["train", "val"]:
+                # wandb: batch logging (train only)
+                if is_train:
                     wandb.log({
-                        f"{phase}/batch_loss": loss.item(),
-                    }, step=step_counters[phase])
-                    step_counters[phase] += 1
+                        f"train/batch_loss": loss.item(),
+                    })
             
         if torch.cuda.is_available():
             torch.cuda.synchronize()                                                        # CPU waits until GPU finishes. More accurate dt.
@@ -278,7 +268,7 @@ def main():
                     f"{phase}/loss_scale": loss_scale,
                     f"{phase}/peak_mem_MB": peak_mem_MB,
                 })
-            wandb.log(metrics, step=step_counters[phase] - 1)                               # ensures logging at the same step as the last batch of that epoch
+            wandb.log(metrics)                               # ensures logging at the same step as the last batch of that epoch
         return epoch_loss, epoch_acc
     
     # checkpoint helper
@@ -302,7 +292,7 @@ def main():
         optimizer,
         max_lr=cfg.lr_head,
         total_steps=total_steps,
-        pct_start=0.2,            # 20% of total steps for LR warm-up
+        pct_start=0.35,            # 35% of total steps for LR warm-up
         anneal_strategy="cos",    # cosine annealing down
     )
 
@@ -335,17 +325,23 @@ def main():
     print("\nPhase 2: fine-tune")
     
     # unfreeze backbone
+    print("\nUnfreezing backbone...")
     for p in model.parameters():
         p.requires_grad = True
+                    
+    if torch.cuda.is_available() and torch.cuda.get_device_properties(DEVICE).major >= 7:
+        torch.cuda.empty_cache() # free the memory (helpful, but optional)
+        model = torch.compile(model) 
+        print(f"GPU CC {torch.cuda.get_device_properties(DEVICE).major}.x detected - compiled model")
 
-    optimizer = optim.Adam(model.parameters(), lr=cfg.lr_backbone)
+    optimizer = optim.Adam(model.parameters(), lr=cfg.lr_backbone)  
     total_steps = cfg.num_epochs_phase2 * n_steps_per_epoch
 
     scheduler = OneCycleLR(
         optimizer,
         max_lr=cfg.lr_backbone,
         total_steps=total_steps,
-        pct_start=0.2,
+        pct_start=0.15,
         anneal_strategy="cos",
     )
 

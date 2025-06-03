@@ -35,7 +35,7 @@ model.eval()
 
 # 4. Preprocessing: same as test transforms in train.py
 preprocess = transforms.Compose([
-    transforms.Resize(512),
+    transforms.Resize(256),
     transforms.CenterCrop(cfg["estimator"]["hyperparameters"]["img_size"]),
     transforms.ToTensor(),
     transforms.Normalize([0.485,0.456,0.406], 

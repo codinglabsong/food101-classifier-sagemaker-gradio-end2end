@@ -1,19 +1,19 @@
 estimator:
   hyperparameters:
     seed: 42
-    batch_size: 128
-    num_epochs_phase1: 10
-    num_epochs_phase2: 8
-    lr_head: 4e-3
-    lr_backbone: 4e-4
+    batch-size: 128
+    num-epochs-phase1: 8
+    num-epochs-phase2: 10
+    lr-head: 4e-3
+    lr-backbone: 5e-4
     patience: 3
-    num_workers: 3
-    img_size: 224
+    num-workers: 2
+    img-size: 224
   instance_count: 1
-  instance_type: "ml.m5.xlarge"
-  framework_version: "2.2.0"
-  py_version: "py310"
-  base_job_name: "mnist-cnn"
+  instance_type: "ml.g4dn.xlarge"
+  framework_version: "2.6.0"
+  py_version: "py312"
+  base_job_name: "food101-classifier"
   use_spot_instances: true
-  max_run: 7200     # seconds
+  max_run: 10800    # seconds
   max_wait: 14400   # seconds, needed when using spot instances or otherwise wait indefinitely
