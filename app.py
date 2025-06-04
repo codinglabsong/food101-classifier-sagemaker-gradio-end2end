@@ -13,6 +13,7 @@ with open("class_names.txt") as f:
 
 # Build and load model
 
+
 def build_model(num_classes: int) -> nn.Module:
     model = models.efficientnet_b2(weights=models.EfficientNet_B2_Weights.IMAGENET1K_V1)
     in_features = model.classifier[1].in_features
@@ -28,15 +29,18 @@ def load_model(path: str, num_classes: int) -> nn.Module:
     model.eval()
     return model
 
+
 model = load_model("output/model.pth", len(class_names))
 
 # Preprocessing (must match training)
-preprocess = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(cfg["estimator"]["hyperparameters"]["img-size"]),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-])
+preprocess = transforms.Compose(
+    [
+        transforms.Resize(256),
+        transforms.CenterCrop(cfg["estimator"]["hyperparameters"]["img-size"]),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    ]
+)
 
 
 def predict(image):
@@ -45,6 +49,7 @@ def predict(image):
         outputs = model(image)
         probs = F.softmax(outputs, dim=1)[0]
     return {class_names[i]: float(probs[i]) for i in probs.argsort(descending=True)}
+
 
 # Example images for the UI
 example_dir = "examples"
