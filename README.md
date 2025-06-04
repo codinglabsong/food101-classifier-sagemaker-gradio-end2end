@@ -16,9 +16,9 @@ Supports local development, SageMaker training, flexible dataset prep, Weights &
 Skip training and download the latest checkpoint from the
 [GitHub Releases](https://github.com/codinglabsong/food101-end2end-classifier-sagemaker-gradio/releases/latest) page.
 
-| File | Architecture | Test Acc. | Dataset | Trained on | Typical Acc.† |
-|------|--------------|-----------|---------|------------|-------------------|
-| model.pth | EfficientNet-B2 (IMAGENET1K_V1) | 80.0 % | Food-101 | ml.g4dn.xlarge | 78 – 82 %† |
+| File | Architecture | Test Acc. | Dataset | Typical Acc.† |
+|------|--------------|-----------|---------|-------------------|
+| model.pth | EfficientNet-B2 (IMAGENET1K_V1) | 80.0 % | Food-101 | 78 – 82 %† |
 
 *† Published EfficientNet-B2 runs on Food-101 usually score 78–82 % top-1.*
 
