@@ -53,6 +53,7 @@ Skip training and download the latest checkpoint from the
 ├── .env.example               # Example for API keys/secrets
 ├── requirements.txt           # Pip dependencies
 ├── app.py                     # Gradio app interface
+├── class_names.txt            # Food101 class names for Gradio
 ├── README.md
 └── .gitignore
 ```
