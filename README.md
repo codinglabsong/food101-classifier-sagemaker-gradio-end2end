@@ -12,6 +12,7 @@ A hosted demo is available on Hugging Face Spaces: [Food101 End-to-End Classifie
 - Model checkpointing and flexible configuration
 - Ready for deployment (Gradio web app)
 - Gradient clipping, OneCycle LR policy, and mixed precision training (with `autocast` and `GradScaler`) for improved stability and GPU memory efficiency
+- Tests and developer tools such as ruff and black
 
 ## Pre-trained Weights
 Skip training and download the latest checkpoint from the
