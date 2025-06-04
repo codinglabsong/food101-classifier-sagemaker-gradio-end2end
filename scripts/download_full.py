@@ -16,7 +16,7 @@ def main():
         shutil.rmtree(out)
     out.mkdir(parents=True)
     
-    # download MNIST into .cache
+    # download dataset into .cache
     cache = Path(".cache")
     ds_train = datasets.Food101(cache, split="train", download=True)
     ds_test = datasets.Food101(cache, split="test", download=True)

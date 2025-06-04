@@ -1,4 +1,5 @@
-import os, torch, yaml
+from collections import OrderedDict
+import torch, yaml
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models, transforms
@@ -23,20 +24,30 @@ def build_model(num_classes):
     return model
 
 # 2. Load class names
-# Assuming same folder structure as the default flags for train.py's train-dir
-train_dir = "data/sample/train"
-class_names = sorted(os.listdir(train_dir))
+# Load class names from file
+with open("class_names.txt") as f:
+    class_names = [line.strip() for line in f]
 
 # 3. Build and load the model
 num_classes = len(class_names)
 model = build_model(num_classes)
-model.load_state_dict(torch.load("output/model.pth", map_location="cpu"))
+
+# If you see _orig_mod keys, strip the prefix! (Due to possibilty of saving compiled version of model during training)
+ckpt = torch.load("output/model.pth", map_location='cpu')
+new_state_dict = OrderedDict()
+for k, v in ckpt.items():
+    if k.startswith('_orig_mod.'):
+        new_state_dict[k[len('_orig_mod.'):]] = v
+    else:
+        new_state_dict[k] = v
+
+model.load_state_dict(new_state_dict)
 model.eval()
 
 # 4. Preprocessing: same as test transforms in train.py
 preprocess = transforms.Compose([
     transforms.Resize(256),
-    transforms.CenterCrop(cfg["estimator"]["hyperparameters"]["img_size"]),
+    transforms.CenterCrop(cfg["estimator"]["hyperparameters"]["img-size"]),
     transforms.ToTensor(),
     transforms.Normalize([0.485,0.456,0.406], 
                          [0.229,0.224,0.225])
