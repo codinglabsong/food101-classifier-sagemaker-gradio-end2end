@@ -12,6 +12,27 @@ Supports local development, SageMaker training, flexible dataset prep, Weights &
 - Ready for deployment (Gradio web app)
 - Gradient clipping, OneCycle LR policy, and mixed precision training (with `autocast` and `GradScaler`) for improved stability and GPU memory efficiency
 
+## Pre-trained Weights
+Skip training and download the latest checkpoint from the
+[GitHub Releases](https://github.com/codinglabsong/food101-end2end-classifier-sagemaker-gradio/releases/latest) page.
+
+| File | Architecture | Test Acc. | Dataset | Trained on | Typical Acc.† |
+|------|--------------|-----------|---------|------------|-------------------|
+| model.pth | EfficientNet-B2 (IMAGENET1K_V1) | 80.0 % | Food-101 | ml.g4dn.xlarge | 78 – 82 %† |
+
+*† Published EfficientNet-B2 runs on Food-101 usually score 78–82 % top-1.*
+
+<details>
+<summary>Training hyper-parameters</summary>
+
+* seed = 42 &nbsp;•&nbsp; batch size = 128 &nbsp;•&nbsp; img size = 224  
+* phase 1 epochs = 8 &nbsp;•&nbsp; phase 2 epochs = 10  
+* lr-head = 4e-3 &nbsp;•&nbsp; lr-backbone = 5e-4 &nbsp;•&nbsp; patience = 3  
+* workers = 2
+</details>
+
+**Usage:** move the file to `output/model.pth` (or update the path) before running Gradio inference.
+
 ## Project Structure
 ```graphql
 ├── config/
@@ -106,7 +127,7 @@ This project includes an interactive Gradio app for making predictions with the 
 
 2. **Run the App Locally:**
     ```bash
-    python gradio_app.py
+    python app.py
     ```
 - The app will start locally and print a link (e.g., `http://127.0.0.1:7860`) to access the web UI in your browser.
 ## Deploying on Hugging Face Spaces
