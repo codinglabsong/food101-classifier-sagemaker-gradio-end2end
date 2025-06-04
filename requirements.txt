@@ -3,7 +3,6 @@ torchvision
 sagemaker
 tqdm
 PyYAML
-ruff
 python-dotenv
 wandb
 gradio

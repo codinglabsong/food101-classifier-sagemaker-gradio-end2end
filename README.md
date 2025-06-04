@@ -75,7 +75,10 @@ pip install -r requirements.txt
     python scripts/download_full.py --out data/full
     ```
 
-### 3. Train Locally
+### 3. Setting Environment Variables
+Edit `.env` using `.env.example` as a guide for AWS and wandb keys.
+
+### 4. Train Locally
 ```bash
 python src/train.py \
   --batch-size 32 \
@@ -89,10 +92,21 @@ python src/train.py \
 ```
 *Use `--help` for all options.*
 
-### 4. Setting Environment Variables
-Edit `.env` using `.env.example` as a guide for AWS and wandb keys.
+## Results
+My model (EfficientNet-B2) achieved:
 
-### SageMaker Training
+| Metric              | Value |
+|---------------------|------:|
+| Training accuracy   | 69.0% |
+| Validation accuracy | 75.0% |
+| Test accuracy       | 80.0% |
+
+![Training and Validation Accuracy](assets/train_valid_acc.png)
+![Training and Validation Loss](assets/train_valid_loss.png)
+
+The charts above show accuracy and loss over 18 epochs (8 epochs for the head, 10 for fine‑tuning). Solid lines represent training metrics, while dotted lines indicate validation metrics.
+
+## SageMaker Training
 1. Upload tarred datasets to S3:
     ```bash
     tar czf food101-train.tar.gz -C data/full/train .
@@ -105,18 +119,6 @@ Edit `.env` using `.env.example` as a guide for AWS and wandb keys.
     ```bash
     python scripts/remote_train.py
     ```
-
-### Preprocessing Consistency & Image Size Limit
-
-> **Important:**  
-> The preprocessing pipeline (image resizing, cropping, normalization) **must be identical** between training and inference (including Gradio app or deployment).
->
-> - All transforms should use parameters from `config/prod.yaml` (or your config file).
-> - The value of `img_size` used for training and inference must always be ≤ 256, since images are first resized so their short edge is 256 before center cropping.  
-> - **Do not set `img_size` greater than 256.** This would result in errors or ineffective cropping during inference.
-
-**Best practice:**  
-Update only your config file (not hardcoded values) when changing image size or normalization, and always reload configs in both training and inference code.
 
 ## Running the Gradio Inference App
 This project includes an interactive Gradio app for making predictions with the trained model.
@@ -131,6 +133,7 @@ This project includes an interactive Gradio app for making predictions with the 
     python app.py
     ```
 - The app will start locally and print a link (e.g., `http://127.0.0.1:7860`) to access the web UI in your browser.
+
 ## Deploying on Hugging Face Spaces
 1. Create a new Gradio Space on [Hugging Face](https://huggingface.co/spaces).
 2. Upload the following files from this repo:
@@ -143,6 +146,17 @@ This project includes an interactive Gradio app for making predictions with the 
 3. Commit and push to the Space. Hugging Face will build and launch the app.
 4. View the hosted demo: [Food101 End-to-End Classifier](https://huggingface.co/spaces/codinglabsong/food101-end2end-classifier-sagemaker-gradio)
 
+## Preprocessing Consistency & Image Size Limit
+
+> **Important:**  
+> The preprocessing pipeline (image resizing, cropping, normalization) **must be identical** between training and inference (including Gradio app or deployment).
+>
+> - All transforms should use parameters from `config/prod.yaml` (or your config file).
+> - The value of `img_size` used for training and inference must always be ≤ 256, since images are first resized so their short edge is 256 before center cropping.  
+> - **Do not set `img_size` greater than 256.** This would result in errors or ineffective cropping during inference.
+
+**Best practice:**  
+Update only your config file (not hardcoded values) when changing image size or normalization, and always reload configs in both training and inference code.
 
 ## Requirements
 - See `requirements.txt`
