@@ -10,10 +10,7 @@ __pycache__/
 wandb/
 
 # full datasets and cache
-data/full/test/
-data/full/train/
-data/sample/test/
-data/sample/train/
+data/
 *.tar.gz
 .cache
 
