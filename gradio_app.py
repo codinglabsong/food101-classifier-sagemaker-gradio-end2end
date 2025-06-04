@@ -1,72 +1,67 @@
-from collections import OrderedDict
-import torch, yaml
+import os
+import yaml
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models, transforms
 import gradio as gr
 
+# Load config and class names
 cfg = yaml.safe_load(open("config/prod.yaml"))
+with open("class_names.txt") as f:
+    class_names = [line.strip() for line in f]
 
-# 1. Recreate model class
-def build_model(num_classes):
-    """
-    Builds an EfficientNet-B2 model with a custom classification head.
+# Build and load model
 
-    Args:
-        num_classes (int): Number of output classes for the classification head.
-
-    Returns:
-        nn.Module: The modified EfficientNet-B2 model.
-    """
+def build_model(num_classes: int) -> nn.Module:
     model = models.efficientnet_b2(weights=models.EfficientNet_B2_Weights.IMAGENET1K_V1)
     in_features = model.classifier[1].in_features
     model.classifier[1] = nn.Linear(in_features, num_classes)
     return model
 
-# 2. Load class names
-# Load class names from file
-with open("class_names.txt") as f:
-    class_names = [line.strip() for line in f]
 
-# 3. Build and load the model
-num_classes = len(class_names)
-model = build_model(num_classes)
+def load_model(path: str, num_classes: int) -> nn.Module:
+    model = build_model(num_classes)
+    state = torch.load(path, map_location="cpu")
+    state = {k.replace("_orig_mod.", ""): v for k, v in state.items()}
+    model.load_state_dict(state)
+    model.eval()
+    return model
 
-# If you see _orig_mod keys, strip the prefix! (Due to possibilty of saving compiled version of model during training)
-ckpt = torch.load("output/model.pth", map_location='cpu')
-new_state_dict = OrderedDict()
-for k, v in ckpt.items():
-    if k.startswith('_orig_mod.'):
-        new_state_dict[k[len('_orig_mod.'):]] = v
-    else:
-        new_state_dict[k] = v
+model = load_model("output/model.pth", len(class_names))
 
-model.load_state_dict(new_state_dict)
-model.eval()
-
-# 4. Preprocessing: same as test transforms in train.py
+# Preprocessing (must match training)
 preprocess = transforms.Compose([
     transforms.Resize(256),
     transforms.CenterCrop(cfg["estimator"]["hyperparameters"]["img-size"]),
     transforms.ToTensor(),
-    transforms.Normalize([0.485,0.456,0.406], 
-                         [0.229,0.224,0.225])
+    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
 ])
 
-# 5. Inference function
+
 def predict(image):
     image = preprocess(image).unsqueeze(0)
     with torch.no_grad():
-        outputs = model(image)                                      # shape: [1, 101]
-        probs = F.softmax(outputs, dim=1).squeeze().cpu().numpy()   # shape: [101]
-        sorted_indices = probs.argsort()[::-1]                      # descending order
-        result = {class_names[i]: float(probs[i]) for i in sorted_indices}
-    return result
+        outputs = model(image)
+        probs = F.softmax(outputs, dim=1)[0]
+    return {class_names[i]: float(probs[i]) for i in probs.argsort(descending=True)}
 
-# 6. Gradio app
+# Example images for the UI
+example_dir = "examples"
+if os.path.isdir(example_dir):
+    examples = [
+        [os.path.join(example_dir, f)]
+        for f in os.listdir(example_dir)
+        if f.lower().endswith((".png", ".jpg", ".jpeg"))
+    ]
+else:
+    examples = None
+
+# Launch Gradio app
 gr.Interface(
     fn=predict,
     inputs=gr.Image(type="pil"),
-    outputs=gr.Label(num_top_classes=101, label="Class Probabilities"),
-    title="Food101 Classifier"
+    outputs=gr.Label(num_top_classes=5, label="Top Classes"),
+    title="Food101 Classifier",
+    examples=examples,
 ).launch()
