@@ -165,6 +165,21 @@ Update only your config file (not hardcoded values) when changing image size or 
 - Python >= 3.9
 - PyTorch >= 2.6
 
+## Development
+Install the developer tools and set up `pre-commit` hooks:
+
+```bash
+pip install -r requirements-dev.txt
+pre-commit install
+```
+
+Run formatting, linting, and tests with:
+
+```bash
+pre-commit run --all-files
+pytest
+```
+
 ## Contributing
 Open to issues and pull requests!
 
