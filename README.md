@@ -112,8 +112,8 @@ Edit `.env` using `.env.example` as a guide for AWS and wandb keys.
 > The preprocessing pipeline (image resizing, cropping, normalization) **must be identical** between training and inference (including Gradio app or deployment).
 >
 > - All transforms should use parameters from `config/prod.yaml` (or your config file).
-> - The value of `img_size` used for training and inference must always be ≤ 512, since images are first resized so their short edge is 512 before center cropping.  
-> - **Do not set `img_size` greater than 512.** This would result in errors or ineffective cropping during inference.
+> - The value of `img_size` used for training and inference must always be ≤ 256, since images are first resized so their short edge is 256 before center cropping.  
+> - **Do not set `img_size` greater than 256.** This would result in errors or ineffective cropping during inference.
 
 **Best practice:**  
 Update only your config file (not hardcoded values) when changing image size or normalization, and always reload configs in both training and inference code.
