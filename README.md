@@ -50,8 +50,7 @@ Skip training and download the latest checkpoint from the
 │   └── remote_train.py        # Launch SageMaker training job
 ├── src/
 │   └── train.py               # Main training script
-├── tests/
-│   └── test_train.py          # Tests
+├── tests/                     # Tests
 ├── app.py                     # Gradio app interface
 ├── class_names.txt            # Food101 class names for Gradio
 ├── .env.example               # Example for API keys/secrets
