@@ -109,6 +109,17 @@ This project includes an interactive Gradio app for making predictions with the 
     python gradio_app.py
     ```
 - The app will start locally and print a link (e.g., `http://127.0.0.1:7860`) to access the web UI in your browser.
+## Deploying on Hugging Face Spaces
+1. Create a new Gradio Space on [Hugging Face](https://huggingface.co/spaces).
+2. Upload the following files from this repo:
+   - `gradio_app.py`
+   - `requirements.txt`
+   - `class_names.txt`
+   - `config/prod.yaml`
+   - `output/model.pth`
+   - *(optional)* an `examples/` folder with sample images for the Gradio UI
+3. Commit and push to the Space. Hugging Face will build and launch the app.
+
 
 ## Requirements
 - See `requirements.txt`
