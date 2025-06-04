@@ -50,11 +50,16 @@ Skip training and download the latest checkpoint from the
 │   └── remote_train.py        # Launch SageMaker training job
 ├── src/
 │   └── train.py               # Main training script
-├── .env.example               # Example for API keys/secrets
-├── requirements.txt           # Pip dependencies
+├── tests/
+│   └── test_train.py          # Tests
 ├── app.py                     # Gradio app interface
 ├── class_names.txt            # Food101 class names for Gradio
+├── .env.example               # Example for API keys/secrets
+├── requirements.txt           # Pip dependencies
+├── requirements-dev.txt       # Pip dependencies for developer tools
+├── .pre-commit-config.yaml    # Pre-commit settings for ruff and black
 ├── README.md
+├── LICENSE
 └── .gitignore
 ```
 

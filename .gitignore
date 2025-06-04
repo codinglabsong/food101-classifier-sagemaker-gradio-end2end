@@ -1,7 +1,10 @@
-# Byte‐compiled / optimized / DLL files
+# Byte‐compiled / optimized / DLL files / .cache
 __pycache__/
 *.py[cod]
 *$py.class
+.cache
+.pytest_cache
+.ruff_cache
 
 # secrets
 .env
@@ -9,10 +12,9 @@ __pycache__/
 # wandb 
 wandb/
 
-# full datasets and cache
+# datasets
 data/
 *.tar.gz
-.cache
 
 # local‐mode outputs
 sagemaker-*
