@@ -2,6 +2,7 @@
 
 **A reproducible, end-to-end PyTorch pipeline for Food101 image classification.**
 Supports local development, SageMaker training, flexible dataset prep, Weights & Biases, and is ready for deployment through Gradio.
+A hosted demo is available on Hugging Face Spaces: [Food101 End-to-End Classifier](https://huggingface.co/spaces/codinglabsong/food101-end2end-classifier-sagemaker-gradio).
 
 ## Features
 - EfficientNet-B2 transfer learning (feature extraction + fine-tuning)
@@ -140,6 +141,7 @@ This project includes an interactive Gradio app for making predictions with the 
    - `output/model.pth`
    - *(optional)* an `examples/` folder with sample images for the Gradio UI
 3. Commit and push to the Space. Hugging Face will build and launch the app.
+4. View the hosted demo: [Food101 End-to-End Classifier](https://huggingface.co/spaces/codinglabsong/food101-end2end-classifier-sagemaker-gradio)
 
 
 ## Requirements
