@@ -11,7 +11,7 @@ A hosted demo is available on Hugging Face Spaces: [Food101 End-to-End Classifie
 - Logging and experiment tracking (Weights & Biases)
 - Model checkpointing and flexible configuration
 - Ready for deployment (Gradio web app)
-- Gradient clipping, OneCycle LR policy, and mixed precision training (with `autocast` and `GradScaler`) for improved stability and GPU memory efficiency
+- Gradient clipping, OneCycle LR policy, `torch.compile`, and mixed precision training (with `autocast` and `GradScaler`) for improved stability and GPU memory efficiency
 - Tests and developer tools such as ruff and black
 
 ## Pre-trained Weights
