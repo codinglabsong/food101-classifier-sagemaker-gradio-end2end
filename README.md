@@ -13,7 +13,7 @@ A hosted demo is available on Hugging Face Spaces: [Food101 End-to-End Classifie
 - Ready for deployment (Gradio web app)
 - Gradient clipping, OneCycle LR policy, `torch.compile`, and mixed precision training (with `autocast` and `GradScaler`) for improved stability and GPU memory efficiency
 - Tests and developer tools such as ruff and black
-
+ 
 ## Pre-trained Weights
 Skip training and download the latest checkpoint from the
 [GitHub Releases](https://github.com/codinglabsong/food101-end2end-classifier-sagemaker-gradio/releases/latest) page.
